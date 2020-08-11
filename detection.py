@@ -5,10 +5,13 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 import numpy as np
 
+import cv2
 import mxnet as mx
 from mxnet import gluon
 from mxnet.gluon.data.vision import transforms
 from mxnet.gluon.block import SymbolBlock
+
+from mscoco import class_names as coco_class_names
 
 
 __all__ = ['SSDDetector']
@@ -82,11 +85,38 @@ def quad2rbox(q):
     return (xc-w/2, yc-h/2, xc+w/2, yc+h/2, theta)
 
 
-class SSDDetector(BaseDetector):
+def rotate_box(xmin, ymin, xmax, ymax, angle):
+    xc = (xmin+xmax)/2
+    yc = (ymin+ymax)/2
+    src = np.array([(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)], dtype=np.float32)
+    src[:, 0] -= xc
+    src[:, 1] -= yc
+    theta = -angle/180*np.pi
+    mat_rot = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+    dst = np.dot(mat_rot, src.T).T
+    dst[:, 0] += xc
+    dst[:, 1] += yc
+    return dst
+
+
+def plot_boxes(img, bboxes):
+    from random import random
+    img = img.copy()
+    for box in bboxes:
+        xmin, ymin, xmax, ymax, angle, label, score = box
+        pts = rotate_box(xmin, ymin, xmax, ymax, angle)
+        pts = np.int0(pts)
+        c = (random()*255, random()*255, random()*255)
+        cv2.drawContours(img, [pts], -1, c, thickness=2)
+        location = (int(pts[0, 0]), int(pts[0, 1]))
+        cv2.putText(img, label, location, cv2.FONT_HERSHEY_COMPLEX, 0.8, c)
+    return img
+
+
+class SSDDetector(object):
     def __init__(self, params_file, input_size=320,
                  gpu_id=0, nms_thresh=None, nms_topk=400,
                  force_suppress=False):
-        super(JsonDetector, self).__init__()
         if isinstance(input_size, int):
             self.width, self.height = input_size, input_size
         elif isinstance(input_size, (list, tuple)):
@@ -108,7 +138,7 @@ class SSDDetector(BaseDetector):
                                              force_suppress=force_suppress)
         self.net.hybridize()
 
-    def detect(self, imgs, conf_thresh=0.5, batch_size=4):
+    def detect(self, imgs, conf_thresh=0.4, batch_size=4):
 
         # self.net.set_nms(nms_thresh=nms_thresh, nms_topk=400)
 
@@ -175,18 +205,38 @@ class SSDDetector(BaseDetector):
                     else:
                         raise NotImplementedError('Expected bbox with length 4 or 5, got %d' % len(bbox))
 
-                    img_info = {}
-                    img_info['class'] = int(positive_img_ids[box_idx])
-                    img_info['score'] = positive_img_scores[box_idx]
-                    img_info['bbox'] = bbox
-                    img_info['degree'] = float(deg)
-                    img_detection.append(img_info)
+                    bbox.append(float(deg))  # angle
+                    bbox.append(int(positive_img_ids[box_idx]))  # class
+                    bbox.append(positive_img_scores[box_idx])  # score
+                    img_detection.append(bbox)
                 all_detections.append(img_detection)
             t3 = time.time()
             logging.info('batch-size: {} preparation: {:.3f} ms, forward: {:.3f} ms, post: {:.3f} ms'.format(batch_img.shape, (t1-t0)*1000, (t2-t1)*1000,(t3-t2)*1000))
             t0 = time.time()
 
         return all_detections
+
+if __name__ == '__main__':
+    param_file = './output/ssd_coco_mobilenet1.0_512x512-deploy-0150.params'
+    model = SSDDetector(param_file, input_size=512)
+    img_dir = os.path.expanduser('~/.mxnet/datasets/coco/val2017/')
+    img_names = [img_name for img_name in os.listdir(img_dir)]
+    img_names = img_names[0: 3]
+    img_pathes = [os.path.join(img_dir, img_name) for img_name in img_names]
+    imgs = [cv2.imread(img_path) for img_path in img_pathes]
+    imgs = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in imgs]
+    detections = model.detect(imgs)
+
+    all_dets = []
+    for img_dets in detections:
+        try:
+            img_dets = [[xmin, ymin, xmax, ymax, angle, coco_class_names[cls+1], score] for (xmin, ymin, xmax, ymax, angle, cls, score) in  img_dets]
+            all_dets.append(img_dets)
+        except:
+            raise ValueError ('Failed to get coco label with class_id {}'.format(cls))
+
+    for img, detections in zip(imgs, all_dets):
+        img = plot_boxes(img, detections)
 
 
 
