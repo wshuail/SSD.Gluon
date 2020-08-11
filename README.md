@@ -3,7 +3,7 @@ Minimal SSD implemented with MXNet/Gluon and nvidia DALI.
 
 ## train
 ```
-python train --cfg ./cfgs/ssd_mobilenet_1.0_coco_512x512.yaml
+python train.py --cfg ./cfgs/ssd_mobilenet_1.0_coco_512x512.yaml
 ```
 ## requirement
 - pytorch==1.5.0
