@@ -6,14 +6,14 @@ Minimal SSD implemented with MXNet/Gluon and nvidia DALI.
 python train.py --cfg ./cfgs/ssd_mobilenet_1.0_coco_512x512.yaml
 ```
 ## requirement
-- pytorch==1.5.0
+- MXNet==1.5.0
 - nvidia-dali==0.23.0  
 
 ## Performance
 ### COCO: 
 backbone | input_size | mAP(0.5:0.95) 
 --|:--|:------
-mobilenet1.0 | 512 | 23.1 
+mobilenet1.0 | 512 | 24.2 
 
 more models will be trained if I have enough GPU ...
 
