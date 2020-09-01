@@ -1,5 +1,5 @@
 # SSD
-Minimal SSD implemented with MXNet/Gluon and nvidia DALI.  
+Minimal [SSD](https://arxiv.org/abs/1512.02325) implemented with MXNet/Gluon and nvidia DALI.  
 
 ## train
 ```
